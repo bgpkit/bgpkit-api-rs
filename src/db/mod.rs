@@ -6,9 +6,9 @@ pub struct BgpkitDatabase {
 
 impl BgpkitDatabase {
     pub fn new() -> Self {
-        dotenvy::dotenv().unwrap();
-        let api_key = dotenvy::var("POSTGREST_API_KEY").expect("required environment variable POSTGREST_API_KEY not set");
-        let endpoint = dotenvy::var("POSTGREST_ENDPOINT").expect("required environment variable POSTGREST_ENDPOINT not set");
+        dotenvy::dotenv().ok();
+        let api_key = std::env::var("POSTGREST_API_KEY").expect("required environment variable POSTGREST_API_KEY not set");
+        let endpoint = std::env::var("POSTGREST_ENDPOINT").expect("required environment variable POSTGREST_ENDPOINT not set");
         let client = Postgrest::new(endpoint)
             .insert_header("apikey", api_key);
         Self{client}
