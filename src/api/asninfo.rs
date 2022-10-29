@@ -38,20 +38,32 @@ pub struct AsninfoResponse {
 
 #[derive(Deserialize, IntoParams)]
 pub struct Pagination {
+    /// page number, starting from 0
     page: Option<usize>,
+
+    /// page size, default to 10
     page_size: Option<usize>,
 }
 
 impl Default for Pagination {
     fn default() -> Self {
-        Self { page: Some(1), page_size: Some(30) }
+        Self { page: Some(1), page_size: Some(10) }
     }
 }
 
-#[derive(Deserialize, IntoParams)]
+#[derive(Deserialize, IntoParams, Debug)]
 pub struct AsninfoSearchQuery {
+    /// filter results by ASN exact match
     asn: Option<u32>,
-    country_code: Option<String>,
+
+    /// filter results that has asn in the specified array, formatted as ','-separated string
+    asns: Option<String>,
+
+    /// filter results by AS name or organization name
+    name: Option<String>,
+
+    /// filter by two-letter country code or country name
+    country: Option<String>,
 }
 
 /// Search for information regarding autonomous systems.
@@ -74,13 +86,25 @@ pub async fn search_asninfo(
 ) -> Json<AsninfoResponse> {
     let mut db_query = db.client.from("asn_view").select("*");
 
+    dbg!(&query);
+
     if let Some(asn) = &query.asn {
         db_query = db_query.eq("asn", asn.to_string());
     }
 
-    if let Some(code) = &query.country_code {
-        db_query = db_query.eq("country_code", code.to_uppercase());
+    if let Some(asns_str) = &query.asns {
+        let asns: Vec<&str> = asns_str.split(",").collect();
+        db_query = db_query.in_("asn", asns);
     }
+
+    if let Some(country) = &query.country {
+        db_query = db_query.or(format!(r#"country_code.ilike."{}", country_name.ilike."*{}*""#, country, country));
+    }
+
+    if let Some(name) = &query.name {
+        db_query = db_query.or(format!(r#"as_name.ilike."*{}*", org_name.ilike."*{}*""#, name, name));
+    }
+
 
     let page_size = match &pagination.page_size {
         None => { 50 as usize }
