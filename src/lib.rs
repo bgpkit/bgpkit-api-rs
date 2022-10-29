@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use axum::{Extension, Router, routing};
+use axum::http::StatusCode;
 use tracing::info;
 use crate::api::search_asninfo;
 use crate::db::BgpkitDatabase;
@@ -11,6 +12,10 @@ use utoipa_swagger_ui::SwaggerUi;
 
 pub mod api;
 pub mod db;
+
+async fn health_check() -> StatusCode {
+    return StatusCode::OK
+}
 
 
 pub async fn start_service() {
@@ -35,6 +40,7 @@ pub async fn start_service() {
     let app = Router::new()
         .merge(SwaggerUi::new("/docs/*tail").url("/openapi.json", ApiDoc::openapi()))
         .route("/asninfo", routing::get(search_asninfo))
+        .route("/health_check", routing::get(health_check))
         .layer(Extension(db))
         ;
 
