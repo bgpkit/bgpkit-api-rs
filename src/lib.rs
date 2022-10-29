@@ -44,7 +44,7 @@ pub async fn start_service() {
         .layer(Extension(db))
         ;
 
-    let addr = "[::]:3000".parse::<std::net::SocketAddr>().unwrap();
+    let addr = "[::]:80".parse::<std::net::SocketAddr>().unwrap();
 
     info!("start listening to address {}", addr.to_string());
     axum::Server::bind(&addr)
