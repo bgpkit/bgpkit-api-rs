@@ -41,10 +41,12 @@ pub async fn start_service() {
         .merge(SwaggerUi::new("/docs/*tail").url("/openapi.json", ApiDoc::openapi()))
         .route("/asninfo", routing::get(search_asninfo))
         .route("/health_check", routing::get(health_check))
-        .layer(Extension(db))
-        ;
+        .layer(Extension(db));
 
-    let addr = "[::]:80".parse::<std::net::SocketAddr>().unwrap();
+    dotenvy::dotenv().ok();
+    let port_str = std::env::var("BGPKIT_API_PORT").unwrap_or("3000".to_string());
+    let addr_str = format!("[::]:{}", port_str);
+    let addr = addr_str.parse::<std::net::SocketAddr>().unwrap();
 
     info!("start listening to address {}", addr.to_string());
     axum::Server::bind(&addr)
