@@ -86,8 +86,6 @@ pub async fn search_asninfo(
 ) -> Json<AsninfoResponse> {
     let mut db_query = db.client.from("asn_view").select("*");
 
-    dbg!(&query);
-
     if let Some(asn) = &query.asn {
         db_query = db_query.eq("asn", asn.to_string());
     }
