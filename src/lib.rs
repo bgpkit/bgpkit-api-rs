@@ -5,9 +5,8 @@ use tracing::info;
 use crate::api::{search_asninfo, search_roas};
 use crate::db::BgpkitDatabase;
 
-use utoipa::{
-    OpenApi,
-};
+use utoipa::{Modify, OpenApi};
+use utoipa::openapi::{ContactBuilder, LicenseBuilder};
 use utoipa_swagger_ui::SwaggerUi;
 
 pub mod api;
@@ -30,13 +29,27 @@ pub async fn start_service() {
         schemas(api::AsnInfo, api::AsninfoResponse),
         schemas(api::RoasEntry, api::RoasResponse)
     ),
-    modifiers(),
+    modifiers( &Intro ),
     tags(
         (name = "meta", description = "Meta information for Internet entities"),
         (name = "bgp", description = "BGP data")
     )
     )]
     struct ApiDoc;
+
+    struct Intro;
+
+    impl Modify for Intro {
+        fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+            openapi.info.license = Some(LicenseBuilder::new().name("BGPKIT Public Dataset License").url(Some("https://bgpkit.com/aua")).build());
+            openapi.info.title = "BGPKIT Data API".to_string();
+            openapi.info.contact = Some(
+                ContactBuilder::new()
+                    .name(Some("About BGPKIT"))
+                    .url(Some("https://bgpkit.com/about"))
+                    .build());
+        }
+    }
 
 
     let db = Arc::new(BgpkitDatabase::new());
