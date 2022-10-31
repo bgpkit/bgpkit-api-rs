@@ -49,16 +49,18 @@ pub struct RoasRawEntry {
 }
 
 impl RoasRawEntry {
-    fn to_roas_entry(self) -> RoasEntry {
+
+    /// process raw ROAs database query results and fix single-day gaps if there is any
+    fn to_roas_entry(self, fix_gaps: bool) -> RoasEntry {
         let mut current = false;
-        let date_ranges: Vec<Vec<String>> = self.date_ranges.into_iter().map(|date_range|{
+        let mut date_ranges: Vec<Vec<Date<Utc>>> = self.date_ranges.into_iter().map(|date_range|{
 
             let start_exclusive = date_range.starts_with('(');
             let end_exclusive = date_range.ends_with(')');
 
             let dates: Vec<&str> = (&date_range).trim_matches(|c|char::is_ascii_punctuation(&c)).split(",").collect();
-            let mut date_0 = Utc.datetime_from_str(format!("{}T00:00:00Z", dates[0]).as_str(), "%Y-%m-%dT%H:%M:%SZ").unwrap();
-            let mut date_1 = Utc.datetime_from_str(format!("{}T00:00:00Z", dates[1]).as_str(), "%Y-%m-%dT%H:%M:%SZ").unwrap();
+            let mut date_0 = Utc.datetime_from_str(format!("{}T00:00:00Z", dates[0]).as_str(), "%Y-%m-%dT%H:%M:%SZ").unwrap().date();
+            let mut date_1 = Utc.datetime_from_str(format!("{}T00:00:00Z", dates[1]).as_str(), "%Y-%m-%dT%H:%M:%SZ").unwrap().date();
 
             if start_exclusive {
                 date_0 = date_0 + Duration::days(1);
@@ -67,14 +69,44 @@ impl RoasRawEntry {
                 date_1 = date_1 - Duration::days(1);
             }
 
-            if date_1.date() >= (Utc::now() - Duration::days(1)).date() {
+            if date_1 >= (Utc::now() - Duration::days(1)).date() {
                 // The last valid day is at least one day before now
                 current = true;
             }
 
             vec![
-                date_0.format("%Y-%m-%d").to_string(),
-                date_1.format("%Y-%m-%d").to_string(),
+                date_0,
+                date_1
+            ]
+        }).collect();
+
+        if fix_gaps {
+            info!("fixing gaps");
+            let mut cur_start = date_ranges[0][0];
+            let mut cur_end = date_ranges[0][1];
+            let mut new_ranges = vec![];
+
+            for i in 1..(date_ranges.len()) {
+                let date_0 = date_ranges[i][0];
+                let date_1 = date_ranges[i][1];
+                if cur_end == date_0-Duration::days(2) {
+                    cur_end = date_1;
+                } else {
+                    new_ranges.push(vec![cur_start, cur_end]);
+                    cur_start = date_0;
+                    cur_end = date_1;
+                }
+            }
+            new_ranges.push(vec![cur_start, cur_end]);
+
+            date_ranges = new_ranges
+        }
+
+
+        let date_ranges_strs: Vec<Vec<String>> = date_ranges.into_iter().map(|range|{
+            vec![
+                range[0].format("%Y-%m-%d").to_string(),
+                range[1].format("%Y-%m-%d").to_string(),
             ]
         }).collect();
 
@@ -84,7 +116,7 @@ impl RoasRawEntry {
             prefix: self.prefix,
             tal: self.tal,
             current,
-            date_ranges
+            date_ranges: date_ranges_strs
         }
     }
 }
@@ -233,7 +265,7 @@ pub async fn search_roas(
     // convert date ranges to tuples
     let raw_data: Vec<RoasRawEntry> = serde_json::from_str(resp_text.as_str()).unwrap();
     let data: Vec<RoasEntry> = raw_data.into_iter().map(|entry|{
-        entry.to_roas_entry()
+        entry.to_roas_entry(true)
     }).collect();
 
     let response = RoasResponse{
