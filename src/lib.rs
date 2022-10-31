@@ -2,7 +2,7 @@ use std::sync::Arc;
 use axum::{Extension, Router, routing};
 use axum::http::StatusCode;
 use tracing::info;
-use crate::api::search_asninfo;
+use crate::api::{search_asninfo, search_roas};
 use crate::db::BgpkitDatabase;
 
 use utoipa::{
@@ -24,13 +24,16 @@ pub async fn start_service() {
     #[openapi(
         paths(
             api::search_asninfo,
+            api::search_roas,
         ),
     components(
-        schemas(api::AsnInfo, api::AsninfoResponse)
+        schemas(api::AsnInfo, api::AsninfoResponse),
+        schemas(api::RoasEntry, api::RoasResponse)
     ),
     modifiers(),
     tags(
-        (name = "meta", description = "Meta information for Internet entities")
+        (name = "meta", description = "Meta information for Internet entities"),
+        (name = "bgp", description = "BGP data")
     )
     )]
     struct ApiDoc;
@@ -40,6 +43,7 @@ pub async fn start_service() {
     let app = Router::new()
         .merge(SwaggerUi::new("/docs/*tail").url("/openapi.json", ApiDoc::openapi()))
         .route("/asninfo", routing::get(search_asninfo))
+        .route("/roas", routing::get(search_roas))
         .route("/health_check", routing::get(health_check))
         .layer(Extension(db));
 

@@ -3,6 +3,7 @@ use axum::extract::Query;
 use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 use utoipa::{ToSchema, IntoParams};
+use crate::api::Pagination;
 use crate::db::BgpkitDatabase;
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -34,21 +35,6 @@ pub struct AsninfoResponse {
     page: usize,
     page_size: usize,
     data: Vec<AsnInfo>
-}
-
-#[derive(Deserialize, IntoParams)]
-pub struct Pagination {
-    /// page number, starting from 0
-    page: Option<usize>,
-
-    /// page size, default to 10
-    page_size: Option<usize>,
-}
-
-impl Default for Pagination {
-    fn default() -> Self {
-        Self { page: Some(1), page_size: Some(10) }
-    }
 }
 
 #[derive(Deserialize, IntoParams, Debug)]
