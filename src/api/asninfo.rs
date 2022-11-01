@@ -90,21 +90,7 @@ pub async fn search_asninfo(
     }
 
 
-    let page_size = match &pagination.page_size {
-        None => { 50 as usize }
-        Some(p) => {
-            match *p > 1000 {
-                true => 1000 as usize,
-                false => *p
-            }
-        }
-    };
-
-
-    let page = match pagination.page {
-        None => 0 as usize,
-        Some(p) => p
-    };
+    let (page, page_size) = pagination.extract(1000);
 
     let low = page * page_size;
     let high = (page+1) * page_size - 1;

@@ -2,7 +2,7 @@ use std::sync::Arc;
 use axum::{Extension, Router, routing};
 use axum::http::StatusCode;
 use tracing::info;
-use crate::api::{search_asninfo, search_roas};
+use crate::api::{search_asninfo, search_broker, search_roas};
 use crate::db::BgpkitDatabase;
 
 use utoipa::{Modify, OpenApi};
@@ -24,9 +24,11 @@ pub async fn start_service() {
         paths(
             api::search_asninfo,
             api::search_roas,
+            api::search_broker,
         ),
     components(
         schemas(api::AsnInfo, api::AsninfoResponse),
+        schemas(api::BrokerEntry, api::BrokerResponse),
         schemas(api::RoasEntry, api::RoasResponse)
     ),
     modifiers( &Intro ),
@@ -57,6 +59,7 @@ pub async fn start_service() {
         .merge(SwaggerUi::new("/docs/*tail").url("/openapi.json", ApiDoc::openapi()))
         .route("/asninfo", routing::get(search_asninfo))
         .route("/roas", routing::get(search_roas))
+        .route("/broker", routing::get(search_broker))
         .route("/health_check", routing::get(health_check))
         .layer(Extension(db));
 

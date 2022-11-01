@@ -1,8 +1,10 @@
 mod asninfo;
 mod roas;
+mod broker;
 
 pub(crate) use asninfo::*;
 pub(crate) use roas::*;
+pub(crate) use broker::*;
 
 use serde::Deserialize;
 use utoipa::IntoParams;
@@ -16,9 +18,22 @@ pub struct Pagination {
     page_size: Option<usize>,
 }
 
-impl Default for Pagination {
-    fn default() -> Self {
-        Self { page: Some(1), page_size: Some(10) }
+impl Pagination {
+    pub fn extract(&self, max_page_size: usize) -> (usize, usize) {
+        (
+            match self.page {
+                None => 0,
+                Some(p) => p
+            },
+            match self.page_size {
+                None => 10,
+                Some(p) => match p> max_page_size {
+                    true => max_page_size,
+                    false => p
+                }
+            },
+        )
     }
 }
 
+// TODO: error handling https://github.com/tokio-rs/axum/blob/main/examples/customize-extractor-error/src/with_rejection.rs
