@@ -69,12 +69,8 @@ pub struct BrokerSearchQuery {
     ts_start: Option<String>,
     ts_end: Option<String>,
 
-    /// duration of hours before `ts_end` or after `ts_start`
-    duration_hours: Option<u32>,
-    /// duration of minutes before `ts_end` or after `ts_start`
-    duration_minutes: Option<u32>,
-    /// duration of days before `ts_end` or after `ts_start`
-    duration_days: Option<u32>,
+    /// duration before `ts_end` or after `ts_start`
+    duration: Option<String>,
 
     /// filter by route collector projects, i.e. `route-views` or `riperis`
     project: Option<String>,
@@ -149,25 +145,33 @@ pub async fn search_broker(
 
     match (ts_start, ts_end) {
         (Some(start), None) => {
-            if let Some(hours) = &query.duration_hours {
-                ts_end = Some(start + Duration::hours(*hours as i64));
-            }
-            if let Some(days) = &query.duration_days {
-                ts_end = Some(start + Duration::days(*days as i64));
-            }
-            if let Some(minutes) = &query.duration_minutes {
-                ts_end = Some(start + Duration::minutes(*minutes as i64));
+            if let Some(duration_str) = &query.duration {
+                match humantime::parse_duration(duration_str.as_str()) {
+                    Ok(d) => {
+                        ts_end = Some(start + Duration::from_std(d).unwrap());
+                    }
+                    Err(_) => {
+                        return Err(ApiError::new_bad_request(format!(
+                            "cannot parse time duration string: {}",
+                            duration_str
+                        )))
+                    }
+                }
             }
         }
         (None, Some(end)) => {
-            if let Some(hours) = &query.duration_hours {
-                ts_start = Some(end - Duration::hours(*hours as i64));
-            }
-            if let Some(days) = &query.duration_days {
-                ts_start = Some(end - Duration::days(*days as i64));
-            }
-            if let Some(minutes) = &query.duration_minutes {
-                ts_start = Some(end - Duration::minutes(*minutes as i64));
+            if let Some(duration_str) = &query.duration {
+                match humantime::parse_duration(duration_str.as_str()) {
+                    Ok(d) => {
+                        ts_start = Some(end - Duration::from_std(d).unwrap());
+                    }
+                    Err(_) => {
+                        return Err(ApiError::new_bad_request(format!(
+                            "cannot parse time duration string: {}",
+                            duration_str
+                        )))
+                    }
+                }
             }
         }
         _ => {}

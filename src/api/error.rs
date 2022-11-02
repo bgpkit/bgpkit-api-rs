@@ -2,6 +2,7 @@ use crate::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use std::fmt::{Display, Formatter};
+use axum::Json;
 use thiserror::Error;
 
 #[derive(Serialize, Debug, Error)]
@@ -52,7 +53,7 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         (
             StatusCode::from_u16(self.status_code).unwrap(),
-            serde_json::to_string(&self).unwrap(),
+            Json(&self)
         )
             .into_response()
     }
