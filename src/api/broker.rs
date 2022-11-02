@@ -1,14 +1,15 @@
-use std::str::FromStr;
-use std::sync::Arc;
+use crate::api::error::ApiError;
+use crate::api::Pagination;
+use crate::db::{execute, BgpkitDatabase};
 use axum::extract::Query;
 use axum::{Extension, Json};
+use chrono::prelude::*;
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
-use utoipa::{ToSchema, IntoParams};
-use crate::api::Pagination;
-use crate::db::BgpkitDatabase;
-use chrono::prelude::*;
+use std::str::FromStr;
+use std::sync::Arc;
 use tracing::info;
+use utoipa::{IntoParams, ToSchema};
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct BrokerEntry {
@@ -38,9 +39,9 @@ impl BrokerRawEntry {
     fn to_entry(self) -> BrokerEntry {
         let project = match self.collector_id.contains("rrc") {
             true => "riperis".to_string(),
-            false => "route-views".to_string()
+            false => "route-views".to_string(),
         };
-        BrokerEntry{
+        BrokerEntry {
             ts_start: self.ts_start,
             ts_end: self.ts_end,
             project,
@@ -52,7 +53,6 @@ impl BrokerRawEntry {
     }
 }
 
-
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct BrokerResponse {
     page: usize,
@@ -61,7 +61,7 @@ pub struct BrokerResponse {
     /// count of items returned in current query
     count: usize,
 
-    data: Vec<BrokerEntry>
+    data: Vec<BrokerEntry>,
 }
 
 #[derive(Deserialize, IntoParams, Debug)]
@@ -105,8 +105,7 @@ pub async fn search_broker(
     Extension(db): Extension<Arc<BgpkitDatabase>>,
     query: Query<BrokerSearchQuery>,
     pagination: Query<Pagination>,
-) -> Json<BrokerResponse> {
-
+) -> Result<Json<BrokerResponse>, ApiError> {
     let mut db_query = db.client.from("items").select("*");
 
     //////////////////
@@ -119,7 +118,15 @@ pub async fn search_broker(
             // it's unix timestamp
             Some(NaiveDateTime::from_timestamp(ts_end, 0))
         } else {
-            Some(NaiveDateTime::from_str(ts_end_str).unwrap())
+            match NaiveDateTime::from_str(ts_end_str) {
+                Ok(t) => Some(t),
+                Err(_) => {
+                    return Err(ApiError::new_bad_request(format!(
+                        "cannot parse time string: {}",
+                        ts_end_str
+                    )))
+                }
+            }
         };
     }
 
@@ -128,7 +135,15 @@ pub async fn search_broker(
             // it's unix timestamp
             Some(NaiveDateTime::from_timestamp(ts_start, 0))
         } else {
-            Some(NaiveDateTime::from_str(ts_start_str).unwrap())
+            match NaiveDateTime::from_str(ts_start_str) {
+                Ok(t) => Some(t),
+                Err(_) => {
+                    return Err(ApiError::new_bad_request(format!(
+                        "cannot parse time string: {}",
+                        ts_start_str
+                    )))
+                }
+            }
         };
     }
 
@@ -176,7 +191,7 @@ pub async fn search_broker(
         match project.as_str() {
             "route-views" | "routeviews" | "rv" => {
                 db_query = db_query.ilike("collector_id", "route-views%");
-            },
+            }
             "ripe" | "ripencc" | "riperis" | "ris" => {
                 db_query = db_query.ilike("collector_id", "rrc%");
             }
@@ -208,25 +223,27 @@ pub async fn search_broker(
         }
     }
 
-
     db_query = db_query.order("ts_start.asc");
 
     let (page, page_size) = pagination.extract(1000);
     let low = page * page_size;
-    let high = (page+1) * page_size - 1;
+    let high = (page + 1) * page_size - 1;
     db_query = db_query.range(low, high);
 
-    let response = db_query.execute().await.unwrap().text().await.unwrap();
-    let data: Vec<BrokerEntry> = serde_json::from_str::<Vec<BrokerRawEntry>>(response.as_str()).unwrap()
+    let response = execute(db_query).await?;
+
+    let data: Vec<BrokerEntry> = serde_json::from_str::<Vec<BrokerRawEntry>>(response.as_str())
+        .unwrap()
         .into_iter()
-        .map(|entry|entry.to_entry()).collect();
+        .map(|entry| entry.to_entry())
+        .collect();
     let count = data.len();
-    let response = BrokerResponse{
+    let response = BrokerResponse {
         page,
         page_size,
         data,
-        count
+        count,
     };
 
-    Json(response)
+    Ok(Json(response))
 }

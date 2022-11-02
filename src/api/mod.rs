@@ -1,10 +1,12 @@
 mod asninfo;
-mod roas;
 mod broker;
+mod error;
+mod roas;
 
 pub(crate) use asninfo::*;
-pub(crate) use roas::*;
 pub(crate) use broker::*;
+pub(crate) use error::*;
+pub(crate) use roas::*;
 
 use serde::Deserialize;
 use utoipa::IntoParams;
@@ -23,14 +25,14 @@ impl Pagination {
         (
             match self.page {
                 None => 0,
-                Some(p) => p
+                Some(p) => p,
             },
             match self.page_size {
                 None => 10,
-                Some(p) => match p> max_page_size {
+                Some(p) => match p > max_page_size {
                     true => max_page_size,
-                    false => p
-                }
+                    false => p,
+                },
             },
         )
     }

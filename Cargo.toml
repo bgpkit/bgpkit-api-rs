@@ -27,3 +27,5 @@ tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
 
 chrono = "0.4.22"
+humantime = "2.1.0"
+thiserror = "1.0.37"

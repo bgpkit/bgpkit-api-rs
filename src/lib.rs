@@ -1,24 +1,22 @@
-use std::sync::Arc;
-use axum::{Extension, Router, routing};
-use axum::http::StatusCode;
-use tracing::info;
 use crate::api::{search_asninfo, search_broker, search_roas};
 use crate::db::BgpkitDatabase;
+use axum::http::StatusCode;
+use axum::{routing, Extension, Router};
+use std::sync::Arc;
+use tracing::info;
 
-use utoipa::{Modify, OpenApi};
 use utoipa::openapi::{ContactBuilder, LicenseBuilder};
+use utoipa::{Modify, OpenApi};
 use utoipa_swagger_ui::SwaggerUi;
 
 pub mod api;
 pub mod db;
 
 async fn health_check() -> StatusCode {
-    return StatusCode::OK
+    return StatusCode::OK;
 }
 
-
 pub async fn start_service() {
-
     #[derive(OpenApi)]
     #[openapi(
         paths(
@@ -43,16 +41,21 @@ pub async fn start_service() {
 
     impl Modify for Intro {
         fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-            openapi.info.license = Some(LicenseBuilder::new().name("BGPKIT Public Dataset License").url(Some("https://bgpkit.com/aua")).build());
+            openapi.info.license = Some(
+                LicenseBuilder::new()
+                    .name("BGPKIT Public Dataset License")
+                    .url(Some("https://bgpkit.com/aua"))
+                    .build(),
+            );
             openapi.info.title = "BGPKIT Data API".to_string();
             openapi.info.contact = Some(
                 ContactBuilder::new()
                     .name(Some("About BGPKIT"))
                     .url(Some("https://bgpkit.com/about"))
-                    .build());
+                    .build(),
+            );
         }
     }
-
 
     let db = Arc::new(BgpkitDatabase::new());
     let app = Router::new()

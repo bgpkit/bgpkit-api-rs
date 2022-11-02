@@ -1,13 +1,13 @@
-use std::sync::Arc;
-use axum::extract::Query;
-use axum::{Extension, Json};
-use chrono::Duration;
-use serde::{Deserialize, Serialize};
-use utoipa::{ToSchema, IntoParams};
 use crate::api::Pagination;
 use crate::db::BgpkitDatabase;
+use axum::extract::Query;
+use axum::{Extension, Json};
 use chrono::prelude::*;
+use chrono::Duration;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tracing::info;
+use utoipa::{IntoParams, ToSchema};
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct RoasEntry {
@@ -49,36 +49,50 @@ pub struct RoasRawEntry {
 }
 
 impl RoasRawEntry {
-
     /// process raw ROAs database query results and fix single-day gaps if there is any
     fn to_roas_entry(self, fix_gaps: bool) -> RoasEntry {
         let mut current = false;
-        let mut date_ranges: Vec<Vec<Date<Utc>>> = self.date_ranges.into_iter().map(|date_range|{
+        let mut date_ranges: Vec<Vec<Date<Utc>>> = self
+            .date_ranges
+            .into_iter()
+            .map(|date_range| {
+                let start_exclusive = date_range.starts_with('(');
+                let end_exclusive = date_range.ends_with(')');
 
-            let start_exclusive = date_range.starts_with('(');
-            let end_exclusive = date_range.ends_with(')');
+                let dates: Vec<&str> = (&date_range)
+                    .trim_matches(|c| char::is_ascii_punctuation(&c))
+                    .split(",")
+                    .collect();
+                let mut date_0 = Utc
+                    .datetime_from_str(
+                        format!("{}T00:00:00Z", dates[0]).as_str(),
+                        "%Y-%m-%dT%H:%M:%SZ",
+                    )
+                    .unwrap()
+                    .date();
+                let mut date_1 = Utc
+                    .datetime_from_str(
+                        format!("{}T00:00:00Z", dates[1]).as_str(),
+                        "%Y-%m-%dT%H:%M:%SZ",
+                    )
+                    .unwrap()
+                    .date();
 
-            let dates: Vec<&str> = (&date_range).trim_matches(|c|char::is_ascii_punctuation(&c)).split(",").collect();
-            let mut date_0 = Utc.datetime_from_str(format!("{}T00:00:00Z", dates[0]).as_str(), "%Y-%m-%dT%H:%M:%SZ").unwrap().date();
-            let mut date_1 = Utc.datetime_from_str(format!("{}T00:00:00Z", dates[1]).as_str(), "%Y-%m-%dT%H:%M:%SZ").unwrap().date();
+                if start_exclusive {
+                    date_0 = date_0 + Duration::days(1);
+                }
+                if end_exclusive {
+                    date_1 = date_1 - Duration::days(1);
+                }
 
-            if start_exclusive {
-                date_0 = date_0 + Duration::days(1);
-            }
-            if end_exclusive {
-                date_1 = date_1 - Duration::days(1);
-            }
+                if date_1 >= (Utc::now() - Duration::days(1)).date() {
+                    // The last valid day is at least one day before now
+                    current = true;
+                }
 
-            if date_1 >= (Utc::now() - Duration::days(1)).date() {
-                // The last valid day is at least one day before now
-                current = true;
-            }
-
-            vec![
-                date_0,
-                date_1
-            ]
-        }).collect();
+                vec![date_0, date_1]
+            })
+            .collect();
 
         if fix_gaps {
             info!("fixing gaps");
@@ -89,7 +103,7 @@ impl RoasRawEntry {
             for i in 1..(date_ranges.len()) {
                 let date_0 = date_ranges[i][0];
                 let date_1 = date_ranges[i][1];
-                if cur_end == date_0-Duration::days(2) {
+                if cur_end == date_0 - Duration::days(2) {
                     cur_end = date_1;
                 } else {
                     new_ranges.push(vec![cur_start, cur_end]);
@@ -102,21 +116,23 @@ impl RoasRawEntry {
             date_ranges = new_ranges
         }
 
+        let date_ranges_strs: Vec<Vec<String>> = date_ranges
+            .into_iter()
+            .map(|range| {
+                vec![
+                    range[0].format("%Y-%m-%d").to_string(),
+                    range[1].format("%Y-%m-%d").to_string(),
+                ]
+            })
+            .collect();
 
-        let date_ranges_strs: Vec<Vec<String>> = date_ranges.into_iter().map(|range|{
-            vec![
-                range[0].format("%Y-%m-%d").to_string(),
-                range[1].format("%Y-%m-%d").to_string(),
-            ]
-        }).collect();
-
-        RoasEntry{
+        RoasEntry {
             asn: self.asn,
             max_len: self.max_len,
             prefix: self.prefix,
             tal: self.tal,
             current,
-            date_ranges: date_ranges_strs
+            date_ranges: date_ranges_strs,
         }
     }
 }
@@ -125,7 +141,7 @@ impl RoasRawEntry {
 pub struct RoasResponse {
     page: usize,
     page_size: usize,
-    data: Vec<RoasEntry>
+    data: Vec<RoasEntry>,
 }
 
 #[derive(Deserialize, IntoParams, Debug)]
@@ -171,7 +187,6 @@ pub async fn search_roas(
     query: Query<RoasSearchQuery>,
     pagination: Query<Pagination>,
 ) -> Json<RoasResponse> {
-
     // parse pagination parameters
     let (page, page_size) = pagination.extract(1000);
     let offset = page * page_size;
@@ -180,86 +195,110 @@ pub async fn search_roas(
         format!(r#""res_limit": {}"#, page_size),
         format!(r#""res_offset": {}"#, offset),
     ];
-    query_str_array.push(
-        format!(r#""prefix": {}"#,
-                match &query.prefix {
-                    None => {"\"\"".to_string()}
-                    Some(v) => {format!("\"{}\"", v)}
-                }
-        )
-    );
-    query_str_array.push(
-        format!(r#""asn": {}"#,
-                match &query.asn {
-                    None => {"-1".to_string()}
-                    Some(v) => {format!("{}", v)}
-                }
-        )
-    );
-    query_str_array.push(
-        format!(r#""max_len": {}"#,
-                match &query.max_len {
-                    None => {"-1".to_string()}
-                    Some(v) => {format!("{}", v)}
-                }
-        )
-    );
-    query_str_array.push(
-        format!(r#""nic": {}"#,
-                match &query.tal {
-                    None => {"\"\"".to_string()}
-                    Some(v) => {format!("\"{}\"", v)}
-                }
-        )
-    );
+    query_str_array.push(format!(
+        r#""prefix": {}"#,
+        match &query.prefix {
+            None => {
+                "\"\"".to_string()
+            }
+            Some(v) => {
+                format!("\"{}\"", v)
+            }
+        }
+    ));
+    query_str_array.push(format!(
+        r#""asn": {}"#,
+        match &query.asn {
+            None => {
+                "-1".to_string()
+            }
+            Some(v) => {
+                format!("{}", v)
+            }
+        }
+    ));
+    query_str_array.push(format!(
+        r#""max_len": {}"#,
+        match &query.max_len {
+            None => {
+                "-1".to_string()
+            }
+            Some(v) => {
+                format!("{}", v)
+            }
+        }
+    ));
+    query_str_array.push(format!(
+        r#""nic": {}"#,
+        match &query.tal {
+            None => {
+                "\"\"".to_string()
+            }
+            Some(v) => {
+                format!("\"{}\"", v)
+            }
+        }
+    ));
 
     match &query.current {
         None => {
-            query_str_array.push(
-            format!(r#""date": {}"#,
-                    match &query.date {
-                        None => {"\"\"".to_string()}
-                        Some(v) => {format!("\"{}\"", v)}
+            query_str_array.push(format!(
+                r#""date": {}"#,
+                match &query.date {
+                    None => {
+                        "\"\"".to_string()
                     }
-            ));
-            query_str_array.push( format!(r#""not_date": """#));
-        }
-        Some(current) => {
-            match current {
-                true => {
-                    let date = (Utc::today() - Duration::days(1)).format("%Y-%m-%d").to_string();
-                    query_str_array.push( format!(r#""date": "{}""#, date));
-                    query_str_array.push( format!(r#""not_date": """#));
-                },
-                false => {
-                    let date = (Utc::today() - Duration::days(1)).format("%Y-%m-%d").to_string();
-                    query_str_array.push( format!(r#""not_date": "{}""#, date));
-                    query_str_array.push( format!(r#""date": """#));
+                    Some(v) => {
+                        format!("\"{}\"", v)
+                    }
                 }
-            }
+            ));
+            query_str_array.push(format!(r#""not_date": """#));
         }
+        Some(current) => match current {
+            true => {
+                let date = (Utc::today() - Duration::days(1))
+                    .format("%Y-%m-%d")
+                    .to_string();
+                query_str_array.push(format!(r#""date": "{}""#, date));
+                query_str_array.push(format!(r#""not_date": """#));
+            }
+            false => {
+                let date = (Utc::today() - Duration::days(1))
+                    .format("%Y-%m-%d")
+                    .to_string();
+                query_str_array.push(format!(r#""not_date": "{}""#, date));
+                query_str_array.push(format!(r#""date": """#));
+            }
+        },
     }
 
     // construct final RPC query string
     let query_string = format!("{{ {} }}", query_str_array.join(","));
-    info!("{}",&query_string);
+    info!("{}", &query_string);
 
     // execute RPC call
-    let response = db.client.rpc("query_history", query_string).execute().await.unwrap();
+    let response = db
+        .client
+        .rpc("query_history", query_string)
+        .execute()
+        .await
+        .unwrap();
 
     // gather response json text
     let resp_text = response.text().await.unwrap();
 
     // convert date ranges to tuples
     let raw_data: Vec<RoasRawEntry> = serde_json::from_str(resp_text.as_str()).unwrap();
-    let data: Vec<RoasEntry> = raw_data.into_iter().map(|entry|{
-        entry.to_roas_entry(true)
-    }).collect();
+    let data: Vec<RoasEntry> = raw_data
+        .into_iter()
+        .map(|entry| entry.to_roas_entry(true))
+        .collect();
 
-    let response = RoasResponse{
+    let response = RoasResponse {
         page,
         page_size,
-        data
+        data,
     };
 
     Json(response)

@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use crate::api::Pagination;
+use crate::db::BgpkitDatabase;
 use axum::extract::Query;
 use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
-use utoipa::{ToSchema, IntoParams};
-use crate::api::Pagination;
-use crate::db::BgpkitDatabase;
+use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct AsnInfo {
@@ -34,7 +34,7 @@ pub struct AsnInfo {
 pub struct AsninfoResponse {
     page: usize,
     page_size: usize,
-    data: Vec<AsnInfo>
+    data: Vec<AsnInfo>,
 }
 
 #[derive(Deserialize, IntoParams, Debug)]
@@ -82,18 +82,23 @@ pub async fn search_asninfo(
     }
 
     if let Some(country) = &query.country {
-        db_query = db_query.or(format!(r#"country_code.ilike."{}", country_name.ilike."*{}*""#, country, country));
+        db_query = db_query.or(format!(
+            r#"country_code.ilike."{}", country_name.ilike."*{}*""#,
+            country, country
+        ));
     }
 
     if let Some(name) = &query.name {
-        db_query = db_query.or(format!(r#"as_name.ilike."*{}*", org_name.ilike."*{}*""#, name, name));
+        db_query = db_query.or(format!(
+            r#"as_name.ilike."*{}*", org_name.ilike."*{}*""#,
+            name, name
+        ));
     }
-
 
     let (page, page_size) = pagination.extract(1000);
 
     let low = page * page_size;
-    let high = (page+1) * page_size - 1;
+    let high = (page + 1) * page_size - 1;
     db_query = db_query.range(low, high);
 
     let response = db_query.execute().await.unwrap();
@@ -101,9 +106,7 @@ pub async fn search_asninfo(
     let response = AsninfoResponse {
         page,
         page_size,
-        data
+        data,
     };
-    Json(
-        response
-    )
+    Json(response)
 }
