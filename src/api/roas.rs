@@ -141,6 +141,7 @@ impl RoasRawEntry {
 pub struct RoasResponse {
     page: usize,
     page_size: usize,
+    count: usize,
     data: Vec<RoasEntry>,
 }
 
@@ -295,9 +296,11 @@ pub async fn search_roas(
         .map(|entry| entry.to_roas_entry(true))
         .collect();
 
+    let count = data.len();
     let response = RoasResponse {
         page,
         page_size,
+        count,
         data,
     };
 

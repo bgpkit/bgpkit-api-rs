@@ -34,6 +34,7 @@ pub struct AsnInfo {
 pub struct AsninfoResponse {
     page: usize,
     page_size: usize,
+    count: usize,
     data: Vec<AsnInfo>,
 }
 
@@ -103,9 +104,11 @@ pub async fn search_asninfo(
 
     let response = db_query.execute().await.unwrap();
     let data: Vec<AsnInfo> = serde_json::from_str(response.text().await.unwrap().as_str()).unwrap();
+    let count = data.len();
     let response = AsninfoResponse {
         page,
         page_size,
+        count,
         data,
     };
     Json(response)
