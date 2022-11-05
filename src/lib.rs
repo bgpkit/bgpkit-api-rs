@@ -1,4 +1,4 @@
-use crate::api::{search_asninfo, search_broker, search_roas};
+use crate::api::{search_asninfo, search_broker, search_roas, search_peer_stats};
 use crate::db::BgpkitDatabase;
 use axum::http::StatusCode;
 use axum::{routing, Extension, Router};
@@ -23,11 +23,13 @@ pub async fn start_service() {
             api::search_asninfo,
             api::search_roas,
             api::search_broker,
+            api::search_peer_stats,
         ),
     components(
         schemas(api::AsnInfo, api::AsninfoResponse),
         schemas(api::BrokerEntry, api::BrokerResponse),
-        schemas(api::RoasEntry, api::RoasResponse)
+        schemas(api::RoasEntry, api::RoasResponse),
+        schemas(api::PeerStats, api::PeerStatsResponse)
     ),
     modifiers( &Intro ),
     tags(
@@ -63,15 +65,17 @@ pub async fn start_service() {
         .route("/asninfo", routing::get(search_asninfo))
         .route("/roas", routing::get(search_roas))
         .route("/broker", routing::get(search_broker))
+        .route("/peers", routing::get(search_peer_stats))
         .route("/health_check", routing::get(health_check))
         .layer(Extension(db));
 
     dotenvy::dotenv().ok();
     let port_str = std::env::var("BGPKIT_API_PORT").unwrap_or("3000".to_string());
-    let addr_str = format!("[::]:{}", port_str);
+    let addr_str = format!("0.0.0.0:{}", port_str);
     let addr = addr_str.parse::<std::net::SocketAddr>().unwrap();
 
-    info!("start listening to address {}", addr.to_string());
+    info!("start listening to address http://{}", addr.to_string());
+    info!("docs available at http://{}/docs", addr.to_string());
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
