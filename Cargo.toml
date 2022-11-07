@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 axum = "0.5.16"
+tower-http = {version="0.3.4", features=["cors"]}
 anyhow = "1"
 
 utoipa = {version="2", features=["axum_extras"]}

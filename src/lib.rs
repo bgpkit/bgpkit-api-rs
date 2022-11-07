@@ -1,8 +1,9 @@
 use crate::api::{search_asninfo, search_broker, search_roas, search_peer_stats};
 use crate::db::BgpkitDatabase;
-use axum::http::StatusCode;
+use axum::http::{Method, StatusCode};
 use axum::{routing, Extension, Router};
 use std::sync::Arc;
+use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
 use utoipa::openapi::{ContactBuilder, LicenseBuilder};
@@ -59,6 +60,12 @@ pub async fn start_service() {
         }
     }
 
+    let cors = CorsLayer::new()
+        // allow `GET` and `POST` when accessing the resource
+        .allow_methods([Method::GET, Method::POST])
+        // allow requests from any origin
+        .allow_origin(Any);
+
     let db = Arc::new(BgpkitDatabase::new());
     let app = Router::new()
         .merge(SwaggerUi::new("/docs/*tail").url("/openapi.json", ApiDoc::openapi()))
@@ -67,7 +74,8 @@ pub async fn start_service() {
         .route("/broker", routing::get(search_broker))
         .route("/peers", routing::get(search_peer_stats))
         .route("/health_check", routing::get(health_check))
-        .layer(Extension(db));
+        .layer(Extension(db))
+        .layer(cors);
 
     dotenvy::dotenv().ok();
     let port_str = std::env::var("BGPKIT_API_PORT").unwrap_or("3000".to_string());
