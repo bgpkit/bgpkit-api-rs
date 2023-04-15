@@ -68,7 +68,7 @@ pub async fn start_service() {
 
     let db = Arc::new(BgpkitDatabase::new());
     let app = Router::new()
-        .merge(SwaggerUi::new("/docs/*tail").url("/openapi.json", ApiDoc::openapi()))
+        .merge(SwaggerUi::new("/docs").url("/openapi.json", ApiDoc::openapi()))
         .route("/asninfo", routing::get(search_asninfo))
         .route("/roas", routing::get(search_roas))
         .route("/broker", routing::get(search_broker))
