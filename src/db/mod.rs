@@ -18,7 +18,7 @@ impl BgpkitDatabase {
     }
 }
 
-pub async fn execute(builder: Builder<'_>) -> Result<String, ApiError> {
+pub async fn execute(builder: Builder) -> Result<String, ApiError> {
     let response = match builder.execute().await {
         Ok(r) => r,
         Err(_) => return Err(ApiError::new_internal("database request failed")),
